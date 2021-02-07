@@ -1,34 +1,94 @@
 import requests
 from bs4 import BeautifulSoup
 
-user_agent = 'Mozilla/5.0'
-full_lang_names = {'en': 'english', 'fr': 'french'}
+USER_AGENT = 'Mozilla/5.0'
 
-print('Type "en" if you want to translate from French into English,'
-      ' or "fr" if you want to translate from English into French:')
-lang = input()
 
-print('Type the word you want to translate:')
-word = input()
+class Translator:
+    FULL_LANG_NAMES = {'en': 'english', 'fr': 'french'}
 
-print(f'You chose "{lang}" as the language to translate "{word}" to.')
+    @classmethod
+    def run(cls):
 
-translation_direction = ''
-if lang == 'en':
-    translation_direction = full_lang_names['en'] + '-' + full_lang_names['fr']
-elif lang == 'fr':
-    translation_direction = full_lang_names['fr'] + '-' + full_lang_names['en']
+        lang, word = cls.get_task()
+        print(f'You chose "{lang}" as the language to translate "{word}" to.')
 
-resp = requests.get(f'http://context.reverso.net/translation/{translation_direction}/{word}',
-                    headers={'User-Agent': user_agent})
+        translation_direction = cls.get_translation_direction(lang)
 
-print(resp.status_code, 'OK')
-soup = BeautifulSoup(resp.content, 'html.parser')
-print('Translations')
-translations_container = soup.find('div', {'id': 'translations-content'})
-print([word.text.strip() for word in translations_container.find_all('a')])
+        resp = cls.fetch_translation(word, translation_direction)
 
-examples_container = soup.find('section', {'id': 'examples-content'})
+        if resp.status_code != 200:
+            print('Error during fetching data')
+            exit()
 
-print([sentence.text.strip() for sentence in examples_container.find_all('span', {'class': 'text'})])
+        print(resp.status_code, 'OK')
+        print('\n')
 
+        soup = Parser(resp.content)
+
+        translations = soup.get_translations()
+        print('Context examples:')
+        print('\n')
+
+        print(f'{cls.FULL_LANG_NAMES[lang].capitalize()} Translations:')
+        for translation in zip(range(5), translations):
+            print(translation[1])
+        print('\n')
+
+        examples = soup.get_examples()
+        print(f'{cls.FULL_LANG_NAMES[lang].capitalize()} Examples:')
+        for example in zip(range(5), examples):
+            print(example[1]['source'])
+            print(example[1]['target'])
+            print('\n')
+
+    @staticmethod
+    def get_task():
+        print('Type "en" if you want to translate from French into English,'
+              ' or "fr" if you want to translate from English into French:')
+        lang = input()
+
+        print('Type the word you want to translate:')
+        word = input()
+        return lang, word
+
+    @classmethod
+    def get_translation_direction(cls, lang) -> str:
+        translation_direction = ''
+        if lang == 'en':
+            translation_direction = cls.FULL_LANG_NAMES['fr'] + '-' + cls.FULL_LANG_NAMES['en']
+        elif lang == 'fr':
+            translation_direction = cls.FULL_LANG_NAMES['en'] + '-' + cls.FULL_LANG_NAMES['fr']
+
+        return translation_direction
+
+    @staticmethod
+    def fetch_translation(word, translation_direction):
+        resp = requests.get(f'http://context.reverso.net/translation/{translation_direction}/{word}',
+                            headers={'User-Agent': USER_AGENT})
+        return resp
+
+
+class Parser:
+
+    def __init__(self, content):
+        self.soup = BeautifulSoup(content, 'html.parser')
+
+    def get_translations(self):
+        translations_container = self.soup.find('div', {'id': 'translations-content'})
+        return [word.text.strip() for word in translations_container.find_all('a')]
+
+    def get_examples(self):
+        examples_list = []
+        examples_container = self.soup.find('section', {'id': 'examples-content'}).find_all('div', {'class': 'example'})
+
+        for single_example in examples_container:
+            source = single_example.find('div', {'class': 'src'}).find('span', {'class': 'text'}).text.strip()
+            target = single_example.find('div', {'class': 'trg'}).find('span', {'class': 'text'}).text.strip()
+            examples_list.append({'target': target, 'source': source})
+
+        return examples_list
+
+
+if __name__ == '__main__':
+    Translator.run()
