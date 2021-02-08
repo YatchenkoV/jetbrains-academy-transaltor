@@ -7,15 +7,16 @@ USER_AGENT = 'Mozilla/5.0'
 class Translator:
     FULL_LANG_NAMES = {'en': 'english', 'fr': 'french'}
     LANGUAGE = {'en': 'french-english', 'fr': 'english-french'}
+    LANGUAGES = ['Arabic', 'German', 'English', 'Spanish', 'French', 'Hebrew', 'Japanese', 'Dutch', 'Polish',
+                 'Portuguese', 'Romanian', 'Russian', 'Turkish']
     URL = 'https://context.reverso.net/translation'
 
     @classmethod
     def run(cls):
 
-        lang, word = cls.get_task()
-        print(f'You chose "{lang}" as the language to translate "{word}" to.')
+        src_lang, target_lang, word = cls.get_task()
 
-        translation_direction = cls.get_translation_direction(lang)
+        translation_direction = src_lang + '-' + target_lang
 
         resp = cls.fetch_translation(word, translation_direction)
 
@@ -23,36 +24,44 @@ class Translator:
             print('Error during fetching data')
             exit()
 
-        print(resp.status_code, 'OK')
-        print('\n')
-
         soup = Parser(resp.content)
 
         translations = soup.get_translations()
-        print('Context examples:')
         print('\n')
 
-        print(f'{cls.FULL_LANG_NAMES[lang].capitalize()} Translations:')
+        print(f'{target_lang.capitalize()} Translations:')
         for translation in zip(range(5), translations):
             print(translation[1])
         print('\n')
 
         examples = soup.get_examples()
-        print(f'{cls.FULL_LANG_NAMES[lang].capitalize()} Examples:')
+        print(f'{target_lang.capitalize()} Examples:')
         for example in zip(range(5), examples):
             print(example[1]['source'])
             print(example[1]['target'])
             print('\n')
 
-    @staticmethod
-    def get_task():
-        print('Type "en" if you want to translate from French into English,'
-              ' or "fr" if you want to translate from English into French:')
-        lang = input()
+    @classmethod
+    def _get_lang_by_index(cls, index) -> str:
+        return cls.LANGUAGES[index].lower()
+
+    @classmethod
+    def get_task(cls):
+        print("Hello, you're welcome to the translator. Translator supports: ")
+        for index, language in enumerate(cls.LANGUAGES):
+            print(f"{index + 1}. {language.capitalize()}")
+
+        print('Type the number of your language:')
+
+        src_lang = cls._get_lang_by_index(int(input()) - 1)
+
+        print('Type the number of language you want to translate to: ')
+        target_lang = cls._get_lang_by_index(int(input()) - 1)
 
         print('Type the word you want to translate:')
         word = input()
-        return lang, word
+
+        return src_lang, target_lang, word
 
     @classmethod
     def get_translation_direction(cls, lang) -> str:
