@@ -6,6 +6,8 @@ USER_AGENT = 'Mozilla/5.0'
 
 class Translator:
     FULL_LANG_NAMES = {'en': 'english', 'fr': 'french'}
+    LANGUAGE = {'en': 'french-english', 'fr': 'english-french'}
+    URL = 'https://context.reverso.net/translation'
 
     @classmethod
     def run(cls):
@@ -54,17 +56,11 @@ class Translator:
 
     @classmethod
     def get_translation_direction(cls, lang) -> str:
-        translation_direction = ''
-        if lang == 'en':
-            translation_direction = cls.FULL_LANG_NAMES['fr'] + '-' + cls.FULL_LANG_NAMES['en']
-        elif lang == 'fr':
-            translation_direction = cls.FULL_LANG_NAMES['en'] + '-' + cls.FULL_LANG_NAMES['fr']
+        return cls.LANGUAGE[lang]
 
-        return translation_direction
-
-    @staticmethod
-    def fetch_translation(word, translation_direction):
-        resp = requests.get(f'http://context.reverso.net/translation/{translation_direction}/{word}',
+    @classmethod
+    def fetch_translation(cls, word, translation_direction):
+        resp = requests.get(f'{cls.URL}/{translation_direction}/{word}',
                             headers={'User-Agent': USER_AGENT})
         return resp
 
