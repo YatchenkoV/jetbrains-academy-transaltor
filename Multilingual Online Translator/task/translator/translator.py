@@ -1,77 +1,13 @@
+from abc import abstractmethod
+
 import requests
 from bs4 import BeautifulSoup
 
 USER_AGENT = 'Mozilla/5.0'
 
 
-class Translator:
-    FULL_LANG_NAMES = {'en': 'english', 'fr': 'french'}
-    LANGUAGE = {'en': 'french-english', 'fr': 'english-french'}
-    LANGUAGES = ['Arabic', 'German', 'English', 'Spanish', 'French', 'Hebrew', 'Japanese', 'Dutch', 'Polish',
-                 'Portuguese', 'Romanian', 'Russian', 'Turkish']
-    URL = 'https://context.reverso.net/translation'
-
-    @classmethod
-    def run(cls):
-
-        src_lang, target_lang, word = cls.get_task()
-
-        translation_direction = src_lang + '-' + target_lang
-
-        resp = cls.fetch_translation(word, translation_direction)
-
-        if resp.status_code != 200:
-            print('Error during fetching data')
-            exit()
-
-        soup = Parser(resp.content)
-
-        translations = soup.get_translations()
-        print('\n')
-
-        print(f'{target_lang.capitalize()} Translations:')
-        for translation in zip(range(5), translations):
-            print(translation[1])
-        print('\n')
-
-        examples = soup.get_examples()
-        print(f'{target_lang.capitalize()} Examples:')
-        for example in zip(range(5), examples):
-            print(example[1]['source'])
-            print(example[1]['target'])
-            print('\n')
-
-    @classmethod
-    def _get_lang_by_index(cls, index) -> str:
-        return cls.LANGUAGES[index].lower()
-
-    @classmethod
-    def get_task(cls):
-        print("Hello, you're welcome to the translator. Translator supports: ")
-        for index, language in enumerate(cls.LANGUAGES):
-            print(f"{index + 1}. {language.capitalize()}")
-
-        print('Type the number of your language:')
-
-        src_lang = cls._get_lang_by_index(int(input()) - 1)
-
-        print('Type the number of language you want to translate to: ')
-        target_lang = cls._get_lang_by_index(int(input()) - 1)
-
-        print('Type the word you want to translate:')
-        word = input()
-
-        return src_lang, target_lang, word
-
-    @classmethod
-    def get_translation_direction(cls, lang) -> str:
-        return cls.LANGUAGE[lang]
-
-    @classmethod
-    def fetch_translation(cls, word, translation_direction):
-        resp = requests.get(f'{cls.URL}/{translation_direction}/{word}',
-                            headers={'User-Agent': USER_AGENT})
-        return resp
+class UnsuccessfulResponseError(Exception):
+    pass
 
 
 class Parser:
@@ -93,6 +29,119 @@ class Parser:
             examples_list.append({'target': target, 'source': source})
 
         return examples_list
+
+
+class BaseOutput:
+
+    @abstractmethod
+    def output(self, data):
+        pass
+
+
+class FileStorage(BaseOutput):
+
+    def __init__(self, file_name: str):
+        self.file_name = file_name
+
+    def output(self, data):
+        with open(self.file_name, 'a+', encoding="utf-8") as f:
+            f.write(data)
+
+
+class SimpleLogger(BaseOutput):
+
+    def output(self, data):
+        print(data)
+
+
+class Translator:
+    LANGUAGES = ['Arabic', 'German', 'English', 'Spanish', 'French', 'Hebrew', 'Japanese', 'Dutch', 'Polish',
+                 'Portuguese', 'Romanian', 'Russian', 'Turkish']
+    URL = 'https://context.reverso.net/translation'
+
+    @classmethod
+    def run(cls):
+
+        src_lang, target_lang, word = cls.get_task()
+
+        try:
+            if target_lang == 'all':
+                storage = FileStorage(word + '.txt')
+                for lang in cls.LANGUAGES:
+                    lang = lang.lower()
+                    if lang == src_lang:
+                        continue
+                    parser = cls.handle_translation(src_lang, lang, word)
+                    cls.output_translation(lang, parser, translations_amount=1, output_service=storage)
+                    cls.output_translation(lang, parser, translations_amount=1, output_service=SimpleLogger())
+
+            else:
+                parser = cls.handle_translation(src_lang, target_lang, word)
+                cls.output_translation(target_lang, parser, translations_amount=5, output_service=SimpleLogger())
+        except UnsuccessfulResponseError:
+            exit()
+
+    @classmethod
+    def _get_lang_by_index(cls, index) -> str:
+        return cls.LANGUAGES[index].lower()
+
+    @classmethod
+    def get_task(cls):
+        print("Hello, you're welcome to the translator. Translator supports: ")
+        for index, language in enumerate(cls.LANGUAGES):
+            print(f"{index + 1}. {language.capitalize()}")
+
+        print('Type the number of your language:')
+
+        src_lang = cls._get_lang_by_index(int(input()) - 1)
+
+        print("Type the number of a language you want to translate to or '0' to translate to all languages: ")
+        target_lang_index = int(input())
+        target_lang = cls._get_lang_by_index(target_lang_index - 1) if target_lang_index != 0 else 'all'
+
+        print('Type the word you want to translate:')
+        word = input()
+
+        return src_lang, target_lang, word
+
+    @classmethod
+    def fetch_translation(cls, word, translation_direction):
+        resp = requests.get(f'{cls.URL}/{translation_direction}/{word}',
+                            headers={'User-Agent': USER_AGENT})
+
+        if resp.status_code != 200:
+            print('Error during fetching data')
+            raise UnsuccessfulResponseError
+
+        return resp
+
+    @classmethod
+    def handle_translation(cls, src_lang, target_lang, word):
+
+        try:
+            resp = cls.fetch_translation(word, src_lang + '-' + target_lang)
+        except UnsuccessfulResponseError:
+            exit()
+
+        soup = Parser(resp.content)
+        return soup
+
+    @classmethod
+    def output_translation(cls, target_lang: str, parser: Parser, translations_amount: int = 5,
+                           output_service: BaseOutput = SimpleLogger()):
+        output_service.output('\n')
+        output_service.output(f'{target_lang.capitalize()} Translations: \n')
+
+        for translation in zip(range(translations_amount), parser.get_translations()):
+            output_service.output(translation[1] + '\n')
+
+        output_service.output('\n')
+
+        output_service.output(f'{target_lang.capitalize()} Examples: \n')
+        for example in zip(range(translations_amount), parser.get_examples()):
+            output_service.output(example[1]['source'] + '\n')
+            output_service.output(example[1]['target'])
+            output_service.output('\n')
 
 
 if __name__ == '__main__':
