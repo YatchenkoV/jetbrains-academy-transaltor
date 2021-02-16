@@ -42,42 +42,63 @@ class FileStorage(BaseOutput):
 
     def __init__(self, file_name: str):
         self.file_name = file_name
+        self.file = open(file_name, 'a+', encoding="utf-8")
 
     def output(self, data):
-        with open(self.file_name, 'a+', encoding="utf-8") as f:
-            f.write(data)
+        self.file.write(data)
+
+    def read(self):
+        self.file.seek(0)
+        return self.file.read()
+
+    def __del__(self):
+        self.file.close()
 
 
 class SimpleLogger(BaseOutput):
 
     def output(self, data):
+        # return print
         print(data)
 
 
 class Translator:
     LANGUAGES = ['Arabic', 'German', 'English', 'Spanish', 'French', 'Hebrew', 'Japanese', 'Dutch', 'Polish',
-                 'Portuguese', 'Romanian', 'Russian', 'Turkish']
+                     'Portuguese', 'Romanian', 'Russian', 'Turkish']
     URL = 'https://context.reverso.net/translation'
 
-    @classmethod
-    def run(cls):
+    def print_and_return(string):
+        print(string)
+        return '{}\n'.format(string)
 
-        src_lang, target_lang, word = cls.get_task()
+    def __init__(self):
+        self.session = requests.Session()
 
+    def run(self):
+
+        src_lang, target_lang, word = self.get_task()
+
+        storage = FileStorage(word + '.txt')
         try:
             if target_lang == 'all':
-                storage = FileStorage(word + '.txt')
-                for lang in cls.LANGUAGES:
+
+                for lang in self.LANGUAGES:
                     lang = lang.lower()
                     if lang == src_lang:
                         continue
-                    parser = cls.handle_translation(src_lang, lang, word)
-                    cls.output_translation(lang, parser, translations_amount=1, output_service=storage)
-                    cls.output_translation(lang, parser, translations_amount=1, output_service=SimpleLogger())
+                    parser = self.handle_translation(src_lang, lang, word)
+                    self.output_translation(lang, parser, translations_amount=1, output_service=storage,
+                                            last_symbol='\n')
+                    # self.output_translation(lang, parser, translations_amount=1, output_service=SimpleLogger())
+                print(storage.read())
 
             else:
-                parser = cls.handle_translation(src_lang, target_lang, word)
-                cls.output_translation(target_lang, parser, translations_amount=5, output_service=SimpleLogger())
+                parser = self.handle_translation(src_lang, target_lang, word)
+
+                self.output_translation(target_lang, parser, translations_amount=1, output_service=storage,
+in                                        last_symbol='\n')
+                print(storage.read())
+                # self.output_translation(target_lang, parser, translations_amount=5, output_service=SimpleLogger())
         except UnsuccessfulResponseError:
             exit()
 
@@ -104,10 +125,9 @@ class Translator:
 
         return src_lang, target_lang, word
 
-    @classmethod
-    def fetch_translation(cls, word, translation_direction):
-        resp = requests.get(f'{cls.URL}/{translation_direction}/{word}',
-                            headers={'User-Agent': USER_AGENT})
+    def fetch_translation(self, word, translation_direction):
+        resp = self.session.get(f'{self.URL}/{translation_direction}/{word}',
+                                headers={'User-Agent': USER_AGENT})
 
         if resp.status_code != 200:
             print('Error during fetching data')
@@ -115,11 +135,10 @@ class Translator:
 
         return resp
 
-    @classmethod
-    def handle_translation(cls, src_lang, target_lang, word):
+    def handle_translation(self, src_lang, target_lang, word):
 
         try:
-            resp = cls.fetch_translation(word, src_lang + '-' + target_lang)
+            resp = self.fetch_translation(word, src_lang + '-' + target_lang)
         except UnsuccessfulResponseError:
             exit()
 
@@ -128,21 +147,23 @@ class Translator:
 
     @classmethod
     def output_translation(cls, target_lang: str, parser: Parser, translations_amount: int = 5,
-                           output_service: BaseOutput = SimpleLogger()):
-        output_service.output('\n')
-        output_service.output(f'{target_lang.capitalize()} Translations: \n')
+                           output_service: BaseOutput = SimpleLogger(), last_symbol=''):
+
+        output_service.output(f'{target_lang.capitalize()} Translations: {last_symbol}')
 
         for translation in zip(range(translations_amount), parser.get_translations()):
-            output_service.output(translation[1] + '\n')
+            output_service.output(translation[1] + last_symbol)
 
         output_service.output('\n')
 
-        output_service.output(f'{target_lang.capitalize()} Examples: \n')
+        output_service.output(f'{target_lang.capitalize()} Examples: {last_symbol}')
         for example in zip(range(translations_amount), parser.get_examples()):
-            output_service.output(example[1]['source'] + '\n')
+            output_service.output(example[1]['source'] + last_symbol)
             output_service.output(example[1]['target'])
             output_service.output('\n')
 
+        output_service.output('\n')
+
 
 if __name__ == '__main__':
-    Translator.run()
+    Translator().run()
