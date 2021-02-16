@@ -58,7 +58,6 @@ class FileStorage(BaseOutput):
 class SimpleLogger(BaseOutput):
 
     def output(self, data):
-        # return print
         print(data)
 
 
@@ -67,9 +66,6 @@ class Translator:
                      'Portuguese', 'Romanian', 'Russian', 'Turkish']
     URL = 'https://context.reverso.net/translation'
 
-    def print_and_return(string):
-        print(string)
-        return '{}\n'.format(string)
 
     def __init__(self):
         self.session = requests.Session()
@@ -96,7 +92,7 @@ class Translator:
                 parser = self.handle_translation(src_lang, target_lang, word)
 
                 self.output_translation(target_lang, parser, translations_amount=1, output_service=storage,
-in                                        last_symbol='\n')
+                                        last_symbol='\n')
                 print(storage.read())
                 # self.output_translation(target_lang, parser, translations_amount=5, output_service=SimpleLogger())
         except UnsuccessfulResponseError:
