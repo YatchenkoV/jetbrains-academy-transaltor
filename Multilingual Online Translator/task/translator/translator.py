@@ -2,6 +2,7 @@ from abc import abstractmethod
 
 import requests
 from bs4 import BeautifulSoup
+import sys
 
 USER_AGENT = 'Mozilla/5.0'
 
@@ -72,7 +73,7 @@ class Translator:
 
     def run(self):
 
-        src_lang, target_lang, word = self.get_task()
+        src_lang, target_lang, word = sys.argv[1:]
 
         storage = FileStorage(word + '.txt')
         try:
