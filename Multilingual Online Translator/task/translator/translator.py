@@ -63,25 +63,40 @@ class SimpleLogger(BaseOutput):
 
 
 class Translator:
-    LANGUAGES = ['Arabic', 'German', 'English', 'Spanish', 'French', 'Hebrew', 'Japanese', 'Dutch', 'Polish',
-                     'Portuguese', 'Romanian', 'Russian', 'Turkish']
+    LANGUAGES = ['arabic', 'german', 'english', 'spanish', 'french', 'hebrew', 'japanese', 'dutch', 'polish',
+                 'portuguese', 'romanian', 'russian', 'turkish', 'all']
     URL = 'https://context.reverso.net/translation'
-
 
     def __init__(self):
         self.session = requests.Session()
 
+    def check_supported_lang(self, lang: str):
+        return self.LANGUAGES.index(lang)
+
     def run(self):
 
         src_lang, target_lang, word = sys.argv[1:]
+
+        try:
+            self.check_supported_lang(src_lang)
+        except ValueError as e:
+            print(f"Sorry, the program doesn't support {src_lang}")
+            exit(1)
+
+        try:
+            if target_lang != 'all':
+                self.check_supported_lang(target_lang)
+        except ValueError as e:
+            print(f"Sorry, the program doesn't support {target_lang}")
+            exit(1)
 
         storage = FileStorage(word + '.txt')
         try:
             if target_lang == 'all':
 
                 for lang in self.LANGUAGES:
-                    lang = lang.lower()
-                    if lang == src_lang:
+
+                    if lang == src_lang or lang == 'all':
                         continue
                     parser = self.handle_translation(src_lang, lang, word)
                     self.output_translation(lang, parser, translations_amount=1, output_service=storage,
@@ -96,8 +111,9 @@ class Translator:
                                         last_symbol='\n')
                 print(storage.read())
                 # self.output_translation(target_lang, parser, translations_amount=5, output_service=SimpleLogger())
+
         except UnsuccessfulResponseError:
-            exit()
+            exit(1)
 
     @classmethod
     def _get_lang_by_index(cls, index) -> str:
@@ -123,22 +139,24 @@ class Translator:
         return src_lang, target_lang, word
 
     def fetch_translation(self, word, translation_direction):
-        resp = self.session.get(f'{self.URL}/{translation_direction}/{word}',
-                                headers={'User-Agent': USER_AGENT})
+        try:
+            resp = self.session.get(f'{self.URL}/{translation_direction}/{word}',
+                                    headers={'User-Agent': USER_AGENT})
+        except requests.exceptions.ConnectionError:
+            print('Something wrong with your internet connection')
+            exit(1)
 
-        if resp.status_code != 200:
-            print('Error during fetching data')
+        if resp.status_code == 404:
+            print(f'Sorry, unable to find {word}')
+            raise UnsuccessfulResponseError
+        elif resp.status_code != 200:
+            print('Something wrong with your internet connection')
             raise UnsuccessfulResponseError
 
         return resp
 
     def handle_translation(self, src_lang, target_lang, word):
-
-        try:
-            resp = self.fetch_translation(word, src_lang + '-' + target_lang)
-        except UnsuccessfulResponseError:
-            exit()
-
+        resp = self.fetch_translation(word, src_lang + '-' + target_lang)
         soup = Parser(resp.content)
         return soup
 
